@@ -1,0 +1,49 @@
+# Maven build output
+target/
+
+# Gradle build output
+build/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+out/
+
+# Eclipse
+.project
+.classpath
+.settings/
+
+# Logs
+*.log
+
+# Operating system generated files
+.DS_Store
+Thumbs.db
+
+# Generated files
+*.jar
+*.war
+*.ear
+
+# IntelliJ specific files (e.g., project specific files)
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/dictionaries
+.idea/vcs.xml
+
+# Node modules (if your project includes Node.js)
+node_modules/
+
+# IDE-specific files
+.idea/libraries/
+
+# Spring Boot specific files
+*.class
+*.jar
+*.war
+*.ear
+
+# Temporary files
+*.swp
