@@ -171,10 +171,9 @@ public class BookService {
     }
 
     // Add feedback to a book
-    public boolean addFeedback(FeedbackDTO feedbackDTO) {
+    public boolean addFeedback(FeedbackDTO feedbackDTO,String userId) {
         Books book = getBookById(feedbackDTO.getBookID());
-        User user = userService.findById(feedbackDTO.getUserEmail());
-
+        User user = userService.findById(userId);
         if (book != null && user != null && user.isActiveStatus()) {
             Feedback feedback = new Feedback();
             feedback.setRating(feedbackDTO.getRating());

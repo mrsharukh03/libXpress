@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -12,6 +13,7 @@ import java.time.LocalDateTime;
 public class TransactionReceipt {
     private Long transactionId;
     private LocalDateTime transactionDate;
+    private LocalDate returnDate;
     private double bookPrice;
     private double totalAmmout;
     private  int quentity;

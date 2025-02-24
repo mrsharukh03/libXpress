@@ -15,6 +15,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -42,6 +43,7 @@ public class AdminBookController {
             @ApiResponse(responseCode = "400", description = "Failed to add books")
     })
     @PostMapping("/addBooks")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<String> addBooks(@Validated @RequestBody List<BookDTO> books) {
         boolean isSaved = bookService.saveAll(books);
         if (isSaved) {
@@ -57,6 +59,7 @@ public class AdminBookController {
             @ApiResponse(responseCode = "400", description = "Failed to add book")
     })
     @PostMapping("/publishBook")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<String> addBook(@Validated @RequestBody BookDTO book) {
         boolean isSaved = bookService.save(book);
         if (isSaved) {
@@ -72,6 +75,7 @@ public class AdminBookController {
             @ApiResponse(responseCode = "404", description = "Book not found")
     })
     @DeleteMapping("/deleteBook")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<String> deleteBook(@Parameter(description = "ID of the book to delete") @RequestParam Long id) {
         boolean isDeleted = bookService.deleteById(id);
         if (isDeleted) {
@@ -87,6 +91,7 @@ public class AdminBookController {
             @ApiResponse(responseCode = "400", description = "Failed to add admin")
     })
     @PostMapping("/addAdmin")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<String> addAdmin(@RequestBody AdminRegistrationDTO adminRegistrationDTO) {
         return userService.save(adminRegistrationDTO);
     }
@@ -97,6 +102,7 @@ public class AdminBookController {
             @ApiResponse(responseCode = "400", description = "Invalid book details or request")
     })
     @PostMapping("/updateBook")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<String> updateBook(@Validated @RequestBody BookUpdateDTO bookUpdateDTO) {
         boolean isUpdated = bookService.updateBook(bookUpdateDTO);
 
@@ -112,6 +118,7 @@ public class AdminBookController {
             @ApiResponse(responseCode = "404", description = "User not found")
     })
     @DeleteMapping("/removeUser")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<String> removeUser(@Parameter(description = "ID of the user to remove") @RequestParam String id) {
         boolean isRemoved = userService.deleteUserById(id);
         if (isRemoved) {
@@ -126,6 +133,7 @@ public class AdminBookController {
             @ApiResponse(responseCode = "500", description = "Internal server error")
     })
     @GetMapping("/allUsers")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<List<UserProfileDTO>> getAllUsers() {
         List<UserProfileDTO> allUsers = userService.getAllUsers();
         return new ResponseEntity<>(allUsers, HttpStatus.OK);
@@ -137,6 +145,7 @@ public class AdminBookController {
             @ApiResponse(responseCode = "500", description = "Internal server error")
     })
     @GetMapping("/allTransistion")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<?> allTransistions() {
         return transationService.getAllTransistions();
     }

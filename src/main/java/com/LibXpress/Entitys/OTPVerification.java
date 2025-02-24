@@ -13,4 +13,5 @@ public class OTPVerification {
     private String email;
     private String otp;
     private LocalDateTime expiryDate;
+    private int otpCount;
 }

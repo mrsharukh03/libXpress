@@ -23,40 +23,45 @@ public class WalletService {
         this.userRepo = userRepo;
     }
 
-    public ResponseEntity<?> createWallet(String phone) {
+    public ResponseEntity<?> createWallet(String userId) {
 
         // Check if user exists with the provided phone number
-        User user = userRepo.findUserByPhone(phone);
+        User user = userRepo.findById(userId).orElse(null);
         if (user == null) return new ResponseEntity<>("User not found or incorrect phone number", HttpStatus.NOT_FOUND);
 
         // Check if wallet already exists for this phone number
-        Wallet existingWallet = walletRepo.findById(phone).orElse(null);
+        Wallet existingWallet = walletRepo.findById(user.getPhone()).orElse(null);
         if (existingWallet != null) {
             return new ResponseEntity<>("Wallet already exists", HttpStatus.ALREADY_REPORTED);
         }
 
         // Create and save the new wallet
         Wallet newWallet = new Wallet();
-        newWallet.setPhone(phone);
+        newWallet.setPhone(user.getPhone());
         newWallet.setBalance(0.0);
         newWallet.setCreatedAt(LocalDateTime.now());
-        newWallet.setActiveStatus(false);  // If this is intentional
+        newWallet.setActiveStatus(false);
         walletRepo.save(newWallet);
 
         return new ResponseEntity<>("Wallet created successfully. Please complete KYC to activate the wallet.", HttpStatus.CREATED);
     }
 
-    public ResponseEntity<?> deposit(String phone, double amount) {
-        Wallet wallet = walletRepo.findById(phone).orElse(null);
+    public ResponseEntity<?> deposit(String userId, double amount) {
+        User user = userRepo.findById(userId).orElse(null);
+        if(user == null) return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        Wallet wallet = user.getWallet();
         if(wallet == null) return new ResponseEntity<>("Please Create your wallet",HttpStatus.NOT_FOUND);
         wallet.setBalance(wallet.getBalance()+amount);
         walletRepo.save(wallet);
         return new ResponseEntity<>("Amount "+wallet.getBalance()+" added",HttpStatus.OK);
     }
 
-    public ResponseEntity<Double> getBalance(String phone){
-        Wallet wallet = walletRepo.findById(phone).orElse(null);
-        if(wallet == null) return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+    public ResponseEntity<?> getBalance(String userId){
+        User user = userRepo.findById(userId).orElse(null);
+        if(user == null) return new ResponseEntity<>("User not found",HttpStatus.NOT_FOUND);
+        Wallet wallet = user.getWallet();
+        if(wallet == null) return new ResponseEntity<>("Dont have any wallet",HttpStatus.NOT_FOUND);
+        System.out.println("User Verified successfull ");
         return new ResponseEntity<>(wallet.getBalance(),HttpStatus.OK);
     }
 
@@ -68,15 +73,6 @@ public class WalletService {
         wallet.setBalance(wallet.getBalance()-amount);
         walletRepo.save(wallet);
         return amount;
-    }
-
-    public ResponseEntity<?> withdrawAmount(String phone, Double amount) {
-        Wallet wallet = walletRepo.findById(phone).orElse(null);
-        if (wallet == null) return new ResponseEntity<>("Wallet Not found",HttpStatus.NOT_FOUND);
-        if(!wallet.isActiveStatus()) return new ResponseEntity<>("Please complete your KYC to active your Wallet",HttpStatus.BAD_GATEWAY);
-        Double debit = withdraw(phone,amount);
-        if(debit == null) return new ResponseEntity<>("Insufficient Balance ",HttpStatus.NOT_ACCEPTABLE);
-        return new ResponseEntity<>(debit,HttpStatus.OK);
     }
 
     public boolean makeKYC(String phone) {

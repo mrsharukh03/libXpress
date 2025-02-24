@@ -5,6 +5,7 @@ import com.LibXpress.DTOs.UserDTO.UserProfileDTO;
 import com.LibXpress.DTOs.UserDTO.UserRegistrationDTO;
 import com.LibXpress.Entitys.OTPVerification;
 import com.LibXpress.Entitys.User;
+import com.LibXpress.JWTCnfig.JwtUtils;
 import com.LibXpress.Repositorys.OTPVerificationRepo;
 import com.LibXpress.Repositorys.UserRegistationRepo;
 import com.LibXpress.Repositorys.UserRepo;
@@ -13,12 +14,15 @@ import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.scheduling.annotation.Async;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,36 +33,61 @@ public class UserService {
     private final UserRegistationRepo userRegistationRepo;
     private final MailService mailService;
     private final ModelMapper modelMapper;
+    private final JwtUtils jwtUtils;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     @Autowired
     public UserService(UserRepo userRepo, OTPVerificationRepo otpVerificationRepo,
                        UserRegistationRepo userRegistationRepo, MailService mailService,
-                       ModelMapper modelMapper) {
+                       ModelMapper modelMapper, JwtUtils jwtUtils) {
         this.userRepo = userRepo;
         this.otpVerificationRepo = otpVerificationRepo;
         this.userRegistationRepo = userRegistationRepo;
         this.mailService = mailService;
         this.modelMapper = modelMapper;
+        this.jwtUtils = jwtUtils;
     }
 
     // Helper method for sending OTP
-    @Async
     public boolean sendOTP(String userId) {
+        UserRegistrationDTO userDTO = findRegistationRequest(userId);
         User user = findById(userId);
-        if (user == null) return false;
+        if (userDTO == null && user == null) return false;
 
+        OTPVerification verificationData = otpVerificationRepo.findById(userId).orElse(new OTPVerification());
+
+        // Check if OTP count exceeds 10 and handle the 25-hour break logic
+        if (verificationData.getOtpCount() >= 10) {
+            if (verificationData.getExpiryDate() != null &&
+                    verificationData.getExpiryDate().isAfter(LocalDateTime.now().minusHours(25))) {
+                return false;
+            } else {
+                // If 25 hours have passed, reset the OTP count to 0 and set expiryDate to null
+                verificationData.setOtpCount(0);
+                verificationData.setExpiryDate(LocalDateTime.now());
+            }
+        }
+
+        // If OTP expiry is still valid (within 1 minute of sending), prevent sending a new OTP
+        if (verificationData.getExpiryDate() != null &&
+                verificationData.getExpiryDate().isAfter(LocalDateTime.now().minusMinutes(1))) {
+            return false;
+        }
+
+        // Generate new OTP
         String otp = UserUitlsService.generateOTP();
-        OTPVerification verificationData = new OTPVerification();
         verificationData.setEmail(userId);
         verificationData.setOtp(otp);
-        verificationData.setExpiryDate(LocalDateTime.now().plusMinutes(10)); // 10 minutes expiry time
+        verificationData.setExpiryDate(LocalDateTime.now().plusMinutes(2)); // OTP expires in 2 minutes
+        verificationData.setOtpCount(verificationData.getOtpCount() + 1);
 
         try {
-            otpVerificationRepo.save(verificationData);
             mailService.sendOTPEmail(verificationData);
+            otpVerificationRepo.save(verificationData);
             return true;
         } catch (Exception e) {
-            // Log the exception for better debugging
             e.printStackTrace();
             return false;
         }
@@ -69,17 +98,13 @@ public class UserService {
     public ResponseEntity<String> verifyUser(String userId, String otp) {
         UserRegistrationDTO userDTO = findRegistationRequest(userId);
         if (userDTO == null) return new ResponseEntity<>(ErrorMessages.USER_NOT_FOUND, HttpStatus.NOT_FOUND);
-
         OTPVerification existingData = otpVerificationRepo.findById(userId).orElse(null);
         if (existingData == null) return new ResponseEntity<>(ErrorMessages.USER_NOT_FOUND, HttpStatus.NOT_FOUND);
-
         String validationStatus = UserUitlsService.validateUser(existingData, otp);
-
         switch (validationStatus) {
             case "Invalid":
                 return new ResponseEntity<>(ErrorMessages.INVALID_OTP, HttpStatus.BAD_REQUEST);
             case "expired":
-                otpVerificationRepo.deleteById(userId);
                 return new ResponseEntity<>(ErrorMessages.OTP_EXPIRED, HttpStatus.BAD_REQUEST);
             case "true":
                 return handleValidOTP(userDTO, userId);
@@ -92,7 +117,7 @@ public class UserService {
     private ResponseEntity<String> handleValidOTP(UserRegistrationDTO userDTO, String userId) {
         User user = new User();
         user.setEmail(userDTO.getEmail());
-        user.setPassword(userDTO.getPassword());
+        user.setPassword(passwordEncoder.encode(userDTO.getPassword()));
         user.setName(userDTO.getName());
         user.setPhone(userDTO.getPhone());
         user.setRole("USER");
@@ -114,12 +139,13 @@ public class UserService {
                 sendOTP(userDTO.getEmail());
                 return new ResponseEntity<>(ErrorMessages.OTP_SENT, HttpStatus.ALREADY_REPORTED);
             }
-
+            userDTO.setRegistrationDate(LocalDate.now());
+            userDTO.setPassword(userDTO.getPassword());
             userRegistationRepo.save(userDTO);
             sendOTP(userDTO.getEmail());
             return new ResponseEntity<>(ErrorMessages.OTP_REQUIRED, HttpStatus.ACCEPTED);
         } catch (Exception e) {
-            e.printStackTrace(); // Log the exception for debugging
+            e.printStackTrace();
             return new ResponseEntity<>(ErrorMessages.INTERNAL_ERROR, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
@@ -132,7 +158,7 @@ public class UserService {
 
             User user = new User();
             user.setEmail(userDTO.getEmail());
-            user.setPassword(userDTO.getPassword());
+            user.setPassword(passwordEncoder.encode(userDTO.getPassword()));
             user.setName(userDTO.getName());
             user.setPhone(userDTO.getPhone());
             user.setRole(userDTO.getRole());
@@ -177,6 +203,59 @@ public class UserService {
     public UserProfileDTO getUserProfile(String userId) {
         User existingUser = findById(userId);
         return existingUser == null ? new UserProfileDTO() : modelMapper.map(existingUser, UserProfileDTO.class);
+    }
+
+
+    public ResponseEntity<String> createNewPassword(String userId,String password, String newOTP) {
+        User existingUser = findById(userId);
+        OTPVerification existingOTP = otpVerificationRepo.findById(userId).orElse(null);
+        if(existingOTP == null) return new ResponseEntity<>(ErrorMessages.INVALID_OTP,HttpStatus.NOT_ACCEPTABLE);
+        String validationStatus = UserUitlsService.validateUser(existingOTP,newOTP);
+        switch (validationStatus) {
+            case "Invalid":
+                return new ResponseEntity<>(ErrorMessages.INVALID_OTP, HttpStatus.BAD_REQUEST);
+            case "expired":
+                otpVerificationRepo.deleteById(userId);
+                return new ResponseEntity<>(ErrorMessages.OTP_EXPIRED, HttpStatus.BAD_REQUEST);
+            case "true":
+                if(passwordEncoder.matches(password,existingUser.getPassword())) new ResponseEntity<>("User new password ",HttpStatus.BAD_REQUEST);
+                existingUser.setPassword(passwordEncoder.encode(password));
+                userRepo.save(existingUser);
+                existingOTP.setExpiryDate(LocalDateTime.now().minusMinutes(10));
+                otpVerificationRepo.save(existingOTP);
+                return new ResponseEntity<>("Your password changed ",HttpStatus.OK);
+            default:
+                return new ResponseEntity<>(ErrorMessages.UNKNOWN_ERROR, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    public ResponseEntity<?> login(String email, String password) {
+        try {
+            User existingUser = findById(email);
+            if (existingUser == null) {
+                return new ResponseEntity<>("User not found", HttpStatus.NOT_FOUND);
+            }
+
+            if (passwordEncoder.matches(password, existingUser.getPassword())) {
+                String accessToken = jwtUtils.generateToken(existingUser.getEmail());
+                String refreshToken = jwtUtils.generateRefreshToken(existingUser.getEmail());
+                Map<String,String> loginResponse = new HashMap<>();
+                loginResponse.put("Access Token",accessToken);
+                loginResponse.put("Refresh Token",refreshToken);
+                return new ResponseEntity<>(accessToken, HttpStatus.OK);
+            }
+
+            return new ResponseEntity<>("Invalid credentials", HttpStatus.BAD_REQUEST);
+        } catch (Exception e) {
+            return new ResponseEntity<>("Internal server error", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    public ResponseEntity<String> accessToken(String refreshToken,String username){
+        Boolean isValid = jwtUtils.validateToken(refreshToken,username);
+        if(!isValid) return new ResponseEntity<>("Invalid Token",HttpStatus.UNAUTHORIZED);
+        String accessToken = jwtUtils.generateToken(username);
+        return new ResponseEntity<>(accessToken,HttpStatus.OK);
     }
 
 }

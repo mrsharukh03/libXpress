@@ -1,6 +1,7 @@
 package com.LibXpress.Controller;
 
 import com.LibXpress.DTOs.BookDTO.BookDTO;
+import com.LibXpress.DTOs.BookDTO.BorrowBookRequestDTO;
 import com.LibXpress.DTOs.BookDTO.FeedbackDTO;
 import com.LibXpress.DTOs.UserDTO.UserProfileDTO;
 import com.LibXpress.Services.BookService;
@@ -13,10 +14,12 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -41,8 +44,9 @@ public class DealingController {
             @ApiResponse(responseCode = "500", description = "Internal server error")
     })
     @PostMapping("/feedback")
-    public ResponseEntity<Object> feedback(@RequestBody FeedbackDTO feedback) {
-        boolean isFeedbackSaved = bookService.addFeedback(feedback);
+    @PreAuthorize("hasRole('ROLE_USER')")
+    public ResponseEntity<Object> feedback(@RequestBody FeedbackDTO feedback,@AuthenticationPrincipal UserDetails userDetails) {
+        boolean isFeedbackSaved = bookService.addFeedback(feedback,userDetails.getUsername());
         if (isFeedbackSaved) {
             return new ResponseEntity<>("Thanks for the feedback", HttpStatus.OK);
         }
@@ -56,13 +60,13 @@ public class DealingController {
             @ApiResponse(responseCode = "400", description = "Invalid input provided")
     })
     @PostMapping("/buyBook")
+    @PreAuthorize("hasRole('ROLE_USER')")
     public ResponseEntity<?> buyBook(
             @Parameter(description = "ID of the book to be bought") @RequestParam @Min(1) Long bookId,
-            @Parameter(description = "ID of the user buying the book") @RequestParam @NotNull String userId,
+            @AuthenticationPrincipal UserDetails userDetails,
             @Parameter(description = "Quantity of books to buy") @RequestParam @Min(1) int quantity,
             @Parameter(description = "Payment method chosen for the purchase") @RequestParam @NotBlank String method) {
-
-        UserProfileDTO user = userService.getUserProfile(userId);
+        UserProfileDTO user = userService.getUserProfile(userDetails.getUsername());
         if (user == null) {
             return new ResponseEntity<>("User not found!", HttpStatus.NOT_FOUND);
         }
@@ -71,7 +75,24 @@ public class DealingController {
         if (existingBook == null) {
             return new ResponseEntity<>("Book not found!", HttpStatus.NOT_FOUND);
         }
+        return dealingService.purchaseBook(bookId, userDetails.getUsername(), quantity, method);
+    }
 
-        return dealingService.buyBook(bookId, userId, quantity, method);
+    @GetMapping("/myTransactions")
+    @PreAuthorize("hasRole('ROLE_USER')")
+    public ResponseEntity<?> userTransaction(@AuthenticationPrincipal UserDetails userDetails){
+        return dealingService.findUserTransaction(userDetails.getUsername());
+    }
+
+    @PostMapping("/borrowbook")
+    @PreAuthorize("hasRole('ROLE_USER')")
+    public ResponseEntity<?> borrowBook(@RequestParam BorrowBookRequestDTO borrowRequestDTO,@AuthenticationPrincipal UserDetails userDetails){
+        return dealingService.borrowBook(borrowRequestDTO,userDetails.getUsername());
+    }
+
+    @PutMapping("/returnBook")
+    @PreAuthorize("hasRole('ROLE_USER')")
+    public ResponseEntity<?> returnBook(@RequestParam Long borrowedBookId, @AuthenticationPrincipal UserDetails userDetails) {
+        return dealingService.returnBook(borrowedBookId, userDetails.getUsername());
     }
 }

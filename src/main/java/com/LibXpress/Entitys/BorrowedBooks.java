@@ -3,6 +3,7 @@ package com.LibXpress.Entitys;
 import jakarta.persistence.*;
 import lombok.Data;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 @Data
 @Entity
@@ -21,8 +22,10 @@ public class BorrowedBooks{
     @JoinColumn(name = "book_id")
     private Books book;
 
+    private int quentity;
+
     private LocalDateTime borrowDate;
-    private LocalDateTime returnDate;
+    private LocalDate returnDate;
 
     // Constructors, Getters, and Setters
     public BorrowedBooks() {
