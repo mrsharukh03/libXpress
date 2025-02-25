@@ -3,6 +3,7 @@ package com.LibXpress.Controller;
 import com.LibXpress.DTOs.BookDTO.BookDTO;
 import com.LibXpress.DTOs.BookDTO.FeedbackDTO;
 import com.LibXpress.Services.BookService;
+import com.LibXpress.Services.RecommendationSystem.RecommendationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -13,6 +14,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -24,6 +28,9 @@ public class BookController {
 
     @Autowired
     private BookService bookService;
+
+    @Autowired
+    private RecommendationService recommendationService;
 
     // Get all books with pagination
     @Operation(summary = "Get all books", description = "Fetches all books with pagination")
@@ -102,5 +109,11 @@ public class BookController {
     public ResponseEntity<List<FeedbackDTO>> getFeedback(@Parameter(description = "ID of the book to get feedback") @RequestParam Long bookId) {
         List<FeedbackDTO> allFeedbacks = bookService.getAllFeedbacks(bookId);
         return new ResponseEntity<>(allFeedbacks, HttpStatus.OK);
+    }
+
+    @GetMapping("/recommended")
+    @PreAuthorize("hasRole('ROLE_USER')")
+    public ResponseEntity<?> recommendedBook(@AuthenticationPrincipal UserDetails userDetails){
+        return  recommendationService.hybridRecommendation(userDetails.getUsername());
     }
 }
